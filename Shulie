@@ -1,0 +1,177 @@
+import Mathlib.Data.Nat.Basic
+import Mathlib.Tactic
+
+open Nat Finset
+
+/-- 定义递归数列 S_n -/
+def S : ℕ → ℝ
+| 1       => 1  -- S_1 = 1 (前 0 项的和)
+| (n + 1) => 2 * S n + 1  -- S_(n+1) = 2 * S_n + 1
+| _       => 0
+
+/-- 定义数列 a_n，使 a_1 = 1 -/
+def a : ℕ → ℝ
+| 1       => 1  -- a_1 = 1
+| (n + 1) => S n + 1  -- a_{n+1} = S_n + 1
+| _       => 0  -- 让 Lean 认识 a(0) = 0，但不会影响计算
+
+
+theorem test (a : ℕ → ℝ)(ha : ∀ n > 0, a n = ∑ i ∈ Finset.range (n-1), a (i + 1) + 1) : 
+  ∑ i ∈ Finset.range n, a (i + 1) = 2^n - 1 := by
+  induction n with
+  | zero => 
+    -- Base case: n = 0
+    simp [Finset.range, Finset.sum_empty]
+    -- Both sides equal 0
+    
+  | succ n ih =>
+    -- Inductive step: assume true for n, prove for n+1
+    have h_succ_pos : n + 1 > 0 := Nat.succ_pos n
+    
+    -- Apply the condition for a(n+1)
+    have h_a_succ : a (n + 1) = ∑ i ∈ Finset.range n, a (i + 1) + 1 := by
+      apply ha
+      exact h_succ_pos
+    
+    -- Let's compute the sum for range (n+1)
+    rw [Finset.range_succ]
+    rw [Finset.sum_insert (Finset.not_mem_range_self)]
+    
+    -- We now have: ∑ i ∈ range n, a (i + 1) + a (n + 1)
+    rw [h_a_succ] -- Substitute the value of a(n+1)
+    
+    -- We now have: ∑ i ∈ range n, a (i + 1) + (∑ i ∈ range n, a (i + 1) + 1)
+    rw [ih] -- Use the induction hypothesis for the first sum
+    
+    -- We now have: (2^n - 1) + (∑ i ∈ range n, a (i + 1) + 1)
+    --rw [ih] -- Use the induction hypothesis again
+    
+    -- We now have: (2^n - 1) + (2^n - 1 + 1)
+    -- Simplify: (2^n - 1) + 2^n = 2 * 2^n - 1 = 2^(n+1) - 1
+    ring
+
+
+
+theorem a_formula (a : ℕ → ℝ)(ha : ∀ n > 0, a n = ∑ i ∈ Finset.range (n-1), a (i + 1) + 1) :
+  ∀ n ≥ 1, a n = 2^(n-1) := by
+  intro n hn
+  
+  induction n with
+  | zero =>
+    -- For n = 0, we have a contradiction with hn: 0 ≥ 1
+    -- We need to derive False from this contradiction
+    have h_contra : ¬(0 ≥ 1) := by simp
+    contradiction
+    
+  | succ n' ih =>
+    -- For n = n' + 1 where n' ≥ 0
+    cases n' with
+    | zero =>
+      -- Base case: n = 1, prove a(1) = 2^0 = 1
+      have h1 : a 1 = ∑ i ∈ Finset.range 0, a (i + 1) + 1 := by
+        apply ha
+        exact Nat.one_pos
+      simp [Finset.range, Finset.sum_empty] at h1
+      -- We get a(1) = 0 + 1 = 1
+      -- Need to show 1 = 2^(1-1) = 2^0 = 1
+      simp [h1]
+        
+    | succ n'' =>
+      -- Inductive step: assume a(n''+1) = 2^n'', prove a(n''+2) = 2^(n''+1)
+      -- Fix: Use ih instead of ih_1
+      have ih_case : a (n'' + 1) = 2^n'' := by
+        apply ih
+        exact Nat.succ_le_succ (Nat.zero_le n'')
+          
+      -- Apply the condition for a(n''+2)
+      have h_cond : a (n'' + 2) = ∑ i ∈ Finset.range (n'' + 1), a (i + 1) + 1 := by
+        apply ha
+        exact Nat.succ_pos (n'' + 1)
+          
+      -- Let's analyze the sum ∑ i ∈ Finset.range (n'' + 1), a (i + 1)
+      -- Use the test theorem
+      have h_sum : ∑ i ∈ Finset.range (n'' + 1), a (i + 1) = 2^(n'' + 1) - 1 := by
+        apply test a ha
+          
+      -- Substitute
+      rw [h_sum] at h_cond
+      simp at h_cond
+          
+      -- Now we have a(n''+2) = 2^(n''+1)
+      -- We need to show this equals 2^((n''+2)-1)
+      -- Instead of rewriting, let's just check that they're equal
+      calc
+        a (n'' + 2) = 2^(n'' + 1) := h_cond
+        _ = 2^((n'' + 2) - 1) := by simp
+
+theorem sum_k_a_formula (a : ℕ → ℝ) 
+    (ha : ∀ n > 0, a n = ∑ i ∈ Finset.range (n - 1), a (i + 1) + 1) :
+    ∀ n ≥ 1, ∑ k ∈ range n, (↑k + 1) * a (k+1) = (↑n - 1) * 2^n + 1 := by
+  intro n hn
+  
+  -- We'll use induction on n
+  induction n with
+  | zero => 
+    -- n = 0 contradicts n ≥ 1
+    have h_contra : ¬(0 ≥ 1) := by norm_num
+    contradiction
+    
+  | succ n' ih =>
+    cases n' with
+    | zero =>
+      -- Base case: n = 1
+      simp [sum_range_one]
+      
+      -- We need to compute a(1)
+      have h_a1 : a 1 = 1 := by
+        have h1 : a 1 = ∑ i ∈ Finset.range 0, a (i + 1) + 1 := by
+          apply ha
+          exact Nat.one_pos
+        simp [Finset.range, Finset.sum_empty] at h1
+        exact h1
+      
+      rw [h_a1]
+      
+      -- Now we need to prove (↑1 - 1) * 2^1 + 1 = 1
+
+      
+    | succ n'' =>
+      -- For n = n'' + 2
+      have h_pos : n'' + 1 ≥ 1 := by linarith
+      
+      -- Apply induction hypothesis for n'' + 1
+      specialize ih h_pos
+      
+      -- Rewrite the sum
+      rw [sum_range_succ]
+      
+      -- Apply the induction hypothesis
+      rw [ih]
+      
+      -- We need the formula for a(n'' + 2)
+      have h_a_succ : a (n'' + 2) = 2^(n'' + 1) := by
+        apply a_formula a ha
+        linarith
+      
+      rw [h_a_succ]
+      
+      -- Let's combine terms on the left side
+      have h1 : ((n'' : ℝ)) * 2^(n'' + 1) + 1 + ((n'' + 1 : ℝ) + 1) * 2^(n'' + 1) =
+                (((n'' + 1 : ℝ) - 1) + ((n'' + 1 : ℝ) + 1)) * 2^(n'' + 1) + 1 := by ring
+      simp
+      rw [h1]
+      
+      -- Simplify the coefficient
+      have h2 : ((n'' + 1:ℝ) - 1) + ((n'' + 1 :ℝ) + 1) = 2 * (n'' + 1 :ℝ) := by ring
+      rw [h2]
+      
+      -- Rewrite to use the power rule
+      have h3 : 2 * (n'' + 1 :ℝ) * 2^(n'' + 1) = (n'' + 1 :ℝ) * (2 * 2^(n'' + 1)) := by ring
+      rw [h3]
+      
+      -- Use the power identity
+      have h4 : 2 * 2^(n'' + 1) = (2^(n'' + 2) : ℝ) := by
+        rw [pow_succ]
+        ring
+      rw [h4]
+      
